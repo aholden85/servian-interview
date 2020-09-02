@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "=2.20.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "=0.11.0"
+    }
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "=1.12.0"

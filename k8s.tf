@@ -1,51 +1,17 @@
 provider "kubernetes" {
-  host                   = "${azurerm_kubernetes_cluster.main.prod_k8s_config.0.host}"
-  username               = "${azurerm_kubernetes_cluster.main.prod_k8s_config.0.username}"
-  password               = "${azurerm_kubernetes_cluster.main.prod_k8s_config.0.password}"
-  client_certificate     = "${base64decode(azurerm_kubernetes_cluster.main.prod_k8s_config.0.client_certificate)}"
-  client_key             = "${base64decode(azurerm_kubernetes_cluster.main.prod_k8s_config.0.client_key)}"
-  cluster_ca_certificate = "${base64decode(azurerm_kubernetes_cluster.main.prod_k8s_config.0.cluster_ca_certificate)}"
+  host                   = azurerm_kubernetes_cluster.main.prod_k8s_config.0.host
+  username               = azurerm_kubernetes_cluster.main.prod_k8s_config.0.username
+  password               = azurerm_kubernetes_cluster.main.prod_k8s_config.0.password
+  client_certificate     = base64decode(azurerm_kubernetes_cluster.main.prod_k8s_config.0.client_certificate)
+  client_key             = base64decode(azurerm_kubernetes_cluster.main.prod_k8s_config.0.client_key)
+  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.main.prod_k8s_config.0.cluster_ca_certificate)
 }
-
-resource "kubernetes_pod" "prod_k8s_pod" {
-  metadata {
-    name = "terraform-example"
-  }
-
-  spec {
-    container {
-      image = "docker.pkg.github.com/servian/techchallengeapp/techchallengeapp:latest"
-      name  = "techchallengeapp"
-
-      port {
-        container_port = var.prod_k8s_container_port
-      }
-
-      liveness_probe {
-        http_get {
-          path = "/healthcheck/"
-          port = var.prod_k8s_container_port
-        }
-        #   initial_delay_seconds = 3
-        #   period_seconds        = 3
-      }
-    }
-  }
-}
-
-
-
-
-
-
-
-
 
 resource "kubernetes_deployment" "prod_k8s_deployment" {
   metadata {
     name = "tech-challenge-app"
     labels = {
-      App = "${var.prod_k8s_container_label}"
+      App = var.prod_k8s_container_label
     }
   }
 
@@ -53,19 +19,19 @@ resource "kubernetes_deployment" "prod_k8s_deployment" {
     replicas = 2
     selector {
       match_labels = {
-        App = "${var.prod_k8s_container_label}"
+        App = var.prod_k8s_container_label
       }
     }
     template {
       metadata {
         labels = {
-          App = "${var.prod_k8s_container_label}"
+          App = var.prod_k8s_container_label
         }
       }
       spec {
         container {
-          image = "${var.prod_k8s_container_image}"
-          name  = "${var.prod_k8s_container_name}"
+          image = var.prod_k8s_container_image
+          name  = var.prod_k8s_container_name
 
           port {
             container_port = var.prod_k8s_container_port

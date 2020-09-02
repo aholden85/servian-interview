@@ -5,14 +5,14 @@ resource "random_password" "prod_psql_password" {
 }
 
 resource "azurerm_postgresql_server" "prod_psql_server" {
-  name                = "${var.prod_psql_server_name}"
-  location            = "${var.location}"
-  resource_group_name = "${azurerm_resource_group.rg.name}"
+  name                = var.prod_psql_server_name
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
 
-  administrator_login = "${var.prod_psql_server_login}"
+  administrator_login = var.prod_psql_server_login
 
   # This password will be stored in state as a plaintext string.
-  administrator_login_password = "${random_password.prod_psql_password.result}"
+  administrator_login_password = random_password.prod_psql_password.result
 
   sku_name   = "GP_Gen5_4"
   version    = "9.6"
