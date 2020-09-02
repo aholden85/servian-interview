@@ -1,21 +1,28 @@
-resource "azurerm_postgresql_server" "psql" {
-    name                = vars.psql_server_name
-    location            = vars.location
-    resource_group_name = azurerm_resource_group.rg.name
+# Generate a random password for the PostgreSQL database Administrator login.
+resource "random_password" "prod_psql_password" {
+  length  = 24
+  special = true
+}
 
-    administrator_login          = vars.psql_login
-    # TODO: Implement random password generation.
-    administrator_login_password = "H@Sh1CoR3!"
+resource "azurerm_postgresql_server" "prod_psql_server" {
+  name                = "${var.prod_psql_server_name}"
+  location            = "${var.location}"
+  resource_group_name = "${azurerm_resource_group.rg.name}"
 
-    sku_name   = "GP_Gen5_4"
-    version    = "9.6"
-    storage_mb = 640000
+  administrator_login = "${var.prod_psql_server_login}"
 
-    backup_retention_days        = 7
-    geo_redundant_backup_enabled = true
-    auto_grow_enabled            = true
+  # This password will be stored in state as a plaintext string.
+  administrator_login_password = "${random_password.prod_psql_password.result}"
 
-    public_network_access_enabled    = false
-    ssl_enforcement_enabled          = true
-    ssl_minimal_tls_version_enforced = "TLS1_2"
+  sku_name   = "GP_Gen5_4"
+  version    = "9.6"
+  storage_mb = 640000
+
+  backup_retention_days        = 7
+  geo_redundant_backup_enabled = true
+  auto_grow_enabled            = true
+
+  public_network_access_enabled    = false
+  ssl_enforcement_enabled          = true
+  ssl_minimal_tls_version_enforced = "TLS1_2"
 }
