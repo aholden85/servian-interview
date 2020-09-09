@@ -229,7 +229,7 @@ pq: syntax error at or near "@"
 ```
 
 ## `terraform graph` output
-![Convoluted graphical representation of the Terraform deployment](./image.jpg?raw=true)
+![Convoluted graphical representation of the Terraform deployment](./graph.svg?raw=true)
 Generated using `terraform graph | dot -Tsvg > graph.svg`.
 
 ## Alternative Solutions
