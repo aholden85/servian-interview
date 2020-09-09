@@ -21,6 +21,7 @@ az login
 Connect-AzAccount
 ```
 Also, make sure that you have an active Azure subscription. That could be an issue given that this solution is based upon the Azure platform.
+***NOTE:*** I used the free tier excusively to develop this solution, so it can definitely be done.
 
 ### Initialise and apply the Terraform configuration.
 From within the directory that you've cloned this repo to, issue the following commands.
@@ -40,6 +41,9 @@ access_instructions = To access the application, please visit http://0.0.0.0/.
 
 ### Access the deployed application.
 As you can see in the last line of the `terraform apply` output, a URL will be generated (only with a real IP address) that you can visit to gain access to the deployed web application.
+
+### DESTROY THE SOLUTION
+Don't forget to run a `terraform destroy` once you're done, because no one likes unexpected charges!
 
 ## Approach
 I took the following approach for deploying this software:
