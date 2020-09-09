@@ -165,7 +165,7 @@ SECURITY WARNING: You are building a Docker image from Windows against a non-Win
 PS > docker tag 679cc453c6d6 docker.pkg.github.com/aholden85/servian-interview/techchallengeapp:latest
 
 PS > cat .\TOKEN.txt | docker login https://docker.pkg.github.com -u aholden85 --password-stdin
-
+Login Succeeded
 PS > docker push docker.pkg.github.com/aholden85/servian-interview/techchallengeapp:latest
 The push refers to repository [docker.pkg.github.com/aholden85/servian-interview/techchallengeapp]
 ef5c78f50fbe: Pushed
@@ -228,10 +228,14 @@ TEMPLATE template0;
 pq: syntax error at or near "@"
 ```
 
-### Alternative Solutions
+## `terraform graph` output
+![Convoluted graphical representation of the Terraform deployment](./image.jpg?raw=true)
+Generated using `terraform graph | dot -Tsvg > graph.svg`.
+
+## Alternative Solutions
 ***AKA the ones that didn't make the cut.***
 
-#### Automating the builds of Docker images as part of the environment deployment
+### Automating the builds of Docker images as part of the environment deployment
 I figured that the steps from here had to be incorporating the building of an image, and the pushing of this image into an image registry, into the deployment process. My first iteration was using the `local-exec` provider as part of the `azurerm_container_registry` resource:
 ```hcl
 resource "azurerm_container_registry" "acr" {
@@ -254,7 +258,7 @@ DOCKER
 ```
 I was unable to get this to work due to issues with the `service_principal`, and was unable to get past the stage of authenticating to the Azure Container Registry.
 
-#### ACR images
+### ACR images
 Despite the failures outlined in the previous point, I did write config to use an Azure Container Registry created elsewhere in the Terraform stack to pull Docker images. Hopefully someone else can use this:
 ```hcl
 resource "kubernetes_deployment" "k8s_deployment" {
