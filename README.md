@@ -157,55 +157,7 @@ Despite not being able to pull the `techchallengeapp` docker image from the Serv
 ```sh
 PS > docker build https://github.com/servian/TechChallengeApp.git -t techchallengeapp:latest
 Sending build context to Docker daemon  181.2kB
-Step 1/18 : FROM golang:alpine AS build
- ---> f328e14e69e4
-Step 2/18 : RUN apk add --no-cache curl git alpine-sdk
- ---> Using cache
- ---> b0442bb06e11
-Step 3/18 : ARG SWAGGER_UI_VERSION=3.20.9
- ---> Using cache
- ---> 85aa68199b13
-Step 4/18 : RUN go get -d -v github.com/go-swagger/go-swagger     && cd $GOPATH/src/github.com/go-swagger/go-swagger     && go mod tidy     && go install github.com/go-swagger/go-swagger/cmd/swagger     && curl -sfL https://github.com/swagger-api/swagger-ui/archive/v$SWAGGER_UI_VERSION.tar.gz | tar xz -C /tmp/     && mv /tmp/swagger-ui-$SWAGGER_UI_VERSION /tmp/swagger     && sed -i 's#"https://petstore\.swagger\.io/v2/swagger\.json"#"./swagger.json"#g' /tmp/swagger/dist/index.html
- ---> Using cache
- ---> ca452e005e20
-Step 5/18 : WORKDIR $GOPATH/src/github.com/servian/TechChallengeApp
- ---> Using cache
- ---> 7463558dee47
-Step 6/18 : COPY go.mod go.sum $GOPATH/src/github.com/servian/TechChallengeApp/
- ---> Using cache
- ---> f31c9a2a1894
-Step 7/18 : RUN go mod tidy
- ---> Using cache
- ---> 1f9ed6314895
-Step 8/18 : COPY . .
- ---> Using cache
- ---> cd1703db02a8
-Step 9/18 : RUN go build -o /TechChallengeApp
- ---> Using cache
- ---> fd05b7c5522d
-Step 10/18 : RUN swagger generate spec -o /swagger.json
- ---> Using cache
- ---> 999a695671cd
-Step 11/18 : FROM alpine:latest
- ---> a24bb4013296
-Step 12/18 : WORKDIR /TechChallengeApp
- ---> Running in 868d616e4dfe
-Removing intermediate container 868d616e4dfe
- ---> 26eeb607cb3e
-Step 13/18 : COPY assets ./assets
- ---> 2c7c93c03245
-Step 14/18 : COPY conf.toml ./conf.toml
- ---> ed57a722e097
-Step 15/18 : COPY --from=build /tmp/swagger/dist ./assets/swagger
- ---> 1638f1e34114
-Step 16/18 : COPY --from=build /swagger.json ./assets/swagger/swagger.json
- ---> 9d45142dc3c4
-Step 17/18 : COPY --from=build /TechChallengeApp TechChallengeApp
- ---> 5a930c064cfd
-Step 18/18 : ENTRYPOINT [ "./TechChallengeApp" ]
- ---> Running in af463984ffbc
-Removing intermediate container af463984ffbc
- ---> 679cc453c6d6
+# Build step output omitted.
 Successfully built 679cc453c6d6
 Successfully tagged techchallengeapp:latest
 SECURITY WARNING: You are building a Docker image from Windows against a non-Windows Docker host. All files and directories added to build context will have '-rwxr-xr-x' permissions. It is recommended to double check and reset permissions for sensitive files and directories.
@@ -245,35 +197,7 @@ resource "kubernetes_job" "db_seed" {
           command = [var.container_entrypoint]
           args = ["updatedb", "-s"]
 
-          env {
-            name = "VTT_DBUSER"
-            value = "${azurerm_postgresql_server.pgsql_server.administrator_login}@${azurerm_postgresql_server.pgsql_server.name}"
-          }
-          env {
-            name = "VTT_DBPASSWORD"
-            value = random_password.pgsql_password.result
-          }
-          env {
-            name = "VTT_DBNAME"
-            value = azurerm_postgresql_database.pgsql_db.name
-          }
-          env {
-            name = "VTT_DBPORT"
-            value = var.pgsql_server_port
-          }
-          env {
-            name = "VTT_DBHOST"
-            value = azurerm_postgresql_server.pgsql_server.fqdn
-          }
-          env {
-            name = "VTT_LISTENHOST"
-            value = "0.0.0.0"
-          }
-          env {
-            name = "VTT_LISTENPORT"
-            value = var.container_port
-          }
-        }
+          # Environment variables omitted.
 
         restart_policy = "Never"
 
@@ -288,7 +212,7 @@ resource "kubernetes_job" "db_seed" {
 }
 ```
 
-**NOTE:** Running the database seed function without the `-s` argument would not work regardless of how I formatted the `VTT_DBUSER` variable:
+> :warning: **NOTE:** Running the database seed function without the `-s` argument would not work regardless of how I formatted the `VTT_DBUSER` variable:
 ```sh
 Dropping and recreating database: database-name
 DROP DATABASE IF EXISTS database-name
