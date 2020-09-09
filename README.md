@@ -123,34 +123,7 @@ resource "kubernetes_deployment" "k8s_deployment" {
             container_port = var.container_port
           }
 
-          env {
-            name = "VTT_DBUSER"
-            value = "${azurerm_postgresql_server.pgsql_server.administrator_login}@${azurerm_postgresql_server.pgsql_server.name}"
-          }
-          env {
-            name = "VTT_DBPASSWORD"
-            value = random_password.pgsql_password.result
-          }
-          env {
-            name = "VTT_DBNAME"
-            value = random_pet.pgsql_db_name.id
-          }
-          env {
-            name = "VTT_DBPORT"
-            value = var.pgsql_server_port
-          }
-          env {
-            name = "VTT_DBHOST"
-            value = azurerm_postgresql_server.pgsql_server.fqdn
-          }
-          env {
-            name = "VTT_LISTENHOST"
-            value = "0.0.0.0"
-          }
-          env {
-            name = "VTT_LISTENPORT"
-            value = var.container_port
-          }
+          # Environment variables omitted.
         }
 
         image_pull_secrets {

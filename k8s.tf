@@ -157,7 +157,7 @@ resource "kubernetes_deployment" "k8s_deployment" {
           }
           env {
             name = "VTT_DBNAME"
-            value = random_pet.pgsql_db_name.id
+            value = azurerm_postgresql_database.pgsql_db.name
           }
           env {
             name = "VTT_DBPORT"
