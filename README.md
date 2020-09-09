@@ -177,6 +177,7 @@ fa22f72fa2d7: Pushed
 50644c29ef5a: Pushed
 latest: digest: sha256:82ff8d42e08ae6c10d73126d13bd997cfbfd3f93e7442314be7ad15653812692 size: 1779
 ```
+> :warning: **NOTE:** The solution utilises the docker image built and uploaded to my own GitHub Packages registry, and may break if the download quota is exceeded. You can change where the containers will download the image from by editing the `container_image_path` variable in `variables.tf`. If you change this to a non-GitHub Packages registry, this will break the pattern established in these files and you will need to reconfigure the authentication method used in the `kubernetes_secret` resource in `k8s.tf`. :warning:
 
 ### Running the database "seed" function
 In trying to figure out how to seed the database, I learned about ***[Kubernetes jobs][tf-resource-k8s-job]***. Through the use of the `kubernetes_job` resource, I was able to run up the container and seed the database.
@@ -211,7 +212,6 @@ resource "kubernetes_job" "db_seed" {
   wait_for_completion = true
 }
 ```
-
 > :warning: **NOTE:** Running the database seed function without the `-s` argument would not work regardless of how I formatted the `VTT_DBUSER` variable:
 ```sh
 Dropping and recreating database: database-name
@@ -228,9 +228,17 @@ TEMPLATE template0;
 pq: syntax error at or near "@"
 ```
 
-## `terraform graph` output
-![Convoluted graphical representation of the Terraform deployment](./graph.svg?raw=true)
-Generated using `terraform graph | dot -Tsvg > graph.svg`.
+## Visual graph of Terraform resources
+![Convoluted graphical representation of the Terraform deployment.](./graph.svg?raw=true)
+You can generate your own graph like this by using the `terraform graph` command and feeding the DOT-formatted output into GraphViz to generate an image.
+First, download GraphViz:
+```sh
+choco install graphviz
+```
+Then, generate the image:
+```sh
+terraform graph | dot -Tsvg > graph.svg
+```
 
 ## Alternative Solutions
 ***AKA the ones that didn't make the cut.***
