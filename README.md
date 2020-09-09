@@ -1,1 +1,377 @@
-# servian-interview
+# Deployment of the Servian TechChallengeApp
+Hi - this is my work on automating the deployment of the Servian TechChallengeApp, the Git repo of which can be found ***[here][tca-git-repo]***.
+
+## Usage
+To deploy the solution, ensure you have logged in to Azure using one of the following methods:
+### Azure CLI
+``` sh
+az login
+```
+### Azure Powershell module
+``` powershell
+Connect-AzAccount
+```
+
+## Approach
+I took the following approach for deploying this software:
+* Terraform to define the infrastructure in Azure
+* An Azure Kubernetes Services cluster to house the pods and containers required.
+* A Kubernetes deployment & service to handle the compute requirements.
+* A PostgreSQL Server to store the data.
+
+## Technical Challenges
+The main challenges of this project were related to working within the confines of a free-tier Azure account. That said, there were several others than hopefully can serve as a lesson to others who may be on the same learning journey as myself.
+
+##### Azure Free-tier Limitations
+Microsoft recently applied additional limitations on customers using free benefit subscriptions. One such limitation was the ability to create an instance of Azure Database for PostgreSQL. This was addressed by changing the region from `Australia Southeast` to `Southeast Asia`. Reference ***[here][ms-region-issue]***.
+
+##### Azure PostgreSQL & VNet Rules
+When creating a `azurerm_postgresql_virtual_network_rule`, you must configure `public_network_access_enabled = true` on the `azurerm_postgresql_server` resource. If the variable is set to `false`, then you will receive the following error when running `terraform apply`. Reference ***[here][ms-pgsql-issue]***.
+```sh
+Error: Error submitting PostgreSQL Virtual Network Rule "pgsql-vnet-rule" (PostgreSQL Server: "pgsql", Resource Group: "rg"): postgresql.VirtualNetworkRulesClient#CreateOrUpdate: Failure sending request: StatusCode=405 -- Original Error: Code="FeatureSwitchNotEnabled" Message="Requested feature is not enabled"
+```
+
+##### Terraform, Kubernetes, Docker, and GitHub Packages
+There were no documented examples for using the Terraform `kubernetes_deployment` resource to deploy containers hosted on `docker.pkg.github.com`. I found that I was able to figure things out, and went with a `kubernetes_secret` resource to auth to Github. I found ***[this specific example][tf-resource-secret]*** from the official documentation of the `kubernetes_secret` resource to be very useful, in addition to ***[this article][git-config-docker]*** on Configuring Docker for use with GitHub Packages.
+
+***Note:*** You will need to follow the instructions ***[here][git-create-token]*** to generate a personal access token (referred to in the Terraform example below as `var.github_personal_access_token`) to allow you to programmatically authenticate with GitHub and pull an image from the image registry.
+
+For reference, here is how you configure authenticating against GitHub and using a GitHub Packages-hosted container image for a Kubernetes Deployment using Terraform:
+```hcl
+resource "kubernetes_secret" "github_pull_secret" {
+  metadata {
+    name = "docker-cfg"
+  }
+  data = {
+    ".dockerconfigjson" = <<DOCKER
+{
+    "auths": {
+        "docker.pkg.github.com": {
+            "auth": "${base64encode("${var.github_username}:${var.github_personal_access_token}")}"
+        }
+    }
+}
+DOCKER
+  }
+  type = "kubernetes.io/dockerconfigjson"
+}
+
+resource "kubernetes_deployment" "k8s_deployment" {
+  metadata {
+    name = "http-serve"
+    labels = {
+      App = var.container_label
+    }
+  }
+  spec {
+    replicas = var.container_replicas
+    selector {
+      match_labels = {
+        App = var.container_label
+      }
+    }
+    template {
+      metadata {
+        labels = {
+          App = var.container_label
+        }
+      }
+      spec {
+        container {
+          image = var.container_image_path
+          name = var.container_name
+
+          command = [var.container_entrypoint]
+          args = ["serve"]
+
+          port {
+            container_port = var.container_port
+          }
+
+          env {
+            name = "VTT_DBUSER"
+            value = "${azurerm_postgresql_server.pgsql_server.administrator_login}@${azurerm_postgresql_server.pgsql_server.name}"
+          }
+          env {
+            name = "VTT_DBPASSWORD"
+            value = random_password.pgsql_password.result
+          }
+          env {
+            name = "VTT_DBNAME"
+            value = random_pet.pgsql_db_name.id
+          }
+          env {
+            name = "VTT_DBPORT"
+            value = var.pgsql_server_port
+          }
+          env {
+            name = "VTT_DBHOST"
+            value = azurerm_postgresql_server.pgsql_server.fqdn
+          }
+          env {
+            name = "VTT_LISTENHOST"
+            value = "0.0.0.0"
+          }
+          env {
+            name = "VTT_LISTENPORT"
+            value = var.container_port
+          }
+        }
+
+        image_pull_secrets {
+            name = kubernetes_secret.github_pull_secret.metadata.0.name
+        }
+      }
+    }
+  }
+}
+```
+
+##### GitHub Packages & Data Transfer Limits
+Unfortunately, once I had worked out the authentication process for pulling images from 'private' image registries (such as `docker.pkg.github.com`), I found that I was unable to pull the image due to a billing-related error against the Servian organisation/repo/registry. Further reading ***[here][git-packages-billing]*** seems to indicate that this may be related to data transfer limitations on Github accounts. The output of trying to pull the latest `techchallengeapp` docker image can be seen below:
+```sh
+PS > cat .\TOKEN.txt | docker login https://docker.pkg.github.com -u aholden85 --password-stdin
+Login Succeeded
+PS > docker pull docker.pkg.github.com/servian/techchallengeapp/techchallengeapp:latest
+latest: Pulling from servian/techchallengeapp/techchallengeapp
+df20fa9351a1: Pulling fs layer
+10fcc070186b: Pulling fs layer
+8c81d864b62b: Pulling fs layer
+4f50686dad84: Waiting
+02206d4836ae: Waiting
+81ab3cdbf7ed: Waiting
+379ee390761e: Waiting
+error pulling image configuration: denied: Encountered a billing-related error. Please verify the billing status for this account.
+```
+
+##### Building my own Docker image
+Despite not being able to pull the `techchallengeapp` docker image from the Servian GitHub Packages image registry, I could still build an image from the `TechChallengeApp.git` file in the code repository. I could then push this image to my own GitHub Packages image registry:
+```sh
+PS > docker build https://github.com/servian/TechChallengeApp.git -t techchallengeapp:latest
+Sending build context to Docker daemon  181.2kB
+Step 1/18 : FROM golang:alpine AS build
+ ---> f328e14e69e4
+Step 2/18 : RUN apk add --no-cache curl git alpine-sdk
+ ---> Using cache
+ ---> b0442bb06e11
+Step 3/18 : ARG SWAGGER_UI_VERSION=3.20.9
+ ---> Using cache
+ ---> 85aa68199b13
+Step 4/18 : RUN go get -d -v github.com/go-swagger/go-swagger     && cd $GOPATH/src/github.com/go-swagger/go-swagger     && go mod tidy     && go install github.com/go-swagger/go-swagger/cmd/swagger     && curl -sfL https://github.com/swagger-api/swagger-ui/archive/v$SWAGGER_UI_VERSION.tar.gz | tar xz -C /tmp/     && mv /tmp/swagger-ui-$SWAGGER_UI_VERSION /tmp/swagger     && sed -i 's#"https://petstore\.swagger\.io/v2/swagger\.json"#"./swagger.json"#g' /tmp/swagger/dist/index.html
+ ---> Using cache
+ ---> ca452e005e20
+Step 5/18 : WORKDIR $GOPATH/src/github.com/servian/TechChallengeApp
+ ---> Using cache
+ ---> 7463558dee47
+Step 6/18 : COPY go.mod go.sum $GOPATH/src/github.com/servian/TechChallengeApp/
+ ---> Using cache
+ ---> f31c9a2a1894
+Step 7/18 : RUN go mod tidy
+ ---> Using cache
+ ---> 1f9ed6314895
+Step 8/18 : COPY . .
+ ---> Using cache
+ ---> cd1703db02a8
+Step 9/18 : RUN go build -o /TechChallengeApp
+ ---> Using cache
+ ---> fd05b7c5522d
+Step 10/18 : RUN swagger generate spec -o /swagger.json
+ ---> Using cache
+ ---> 999a695671cd
+Step 11/18 : FROM alpine:latest
+ ---> a24bb4013296
+Step 12/18 : WORKDIR /TechChallengeApp
+ ---> Running in 868d616e4dfe
+Removing intermediate container 868d616e4dfe
+ ---> 26eeb607cb3e
+Step 13/18 : COPY assets ./assets
+ ---> 2c7c93c03245
+Step 14/18 : COPY conf.toml ./conf.toml
+ ---> ed57a722e097
+Step 15/18 : COPY --from=build /tmp/swagger/dist ./assets/swagger
+ ---> 1638f1e34114
+Step 16/18 : COPY --from=build /swagger.json ./assets/swagger/swagger.json
+ ---> 9d45142dc3c4
+Step 17/18 : COPY --from=build /TechChallengeApp TechChallengeApp
+ ---> 5a930c064cfd
+Step 18/18 : ENTRYPOINT [ "./TechChallengeApp" ]
+ ---> Running in af463984ffbc
+Removing intermediate container af463984ffbc
+ ---> 679cc453c6d6
+Successfully built 679cc453c6d6
+Successfully tagged techchallengeapp:latest
+SECURITY WARNING: You are building a Docker image from Windows against a non-Windows Docker host. All files and directories added to build context will have '-rwxr-xr-x' permissions. It is recommended to double check and reset permissions for sensitive files and directories.
+
+PS > docker tag 679cc453c6d6 docker.pkg.github.com/aholden85/servian-interview/techchallengeapp:latest
+
+PS > cat .\TOKEN.txt | docker login https://docker.pkg.github.com -u aholden85 --password-stdin
+
+PS > docker push docker.pkg.github.com/aholden85/servian-interview/techchallengeapp:latest
+The push refers to repository [docker.pkg.github.com/aholden85/servian-interview/techchallengeapp]
+ef5c78f50fbe: Pushed
+6526159089ac: Pushed
+8e69d030f6a3: Pushed
+e5d50e27dc9f: Pushed
+99520ca6f7a5: Pushed
+fa22f72fa2d7: Pushed
+50644c29ef5a: Pushed
+latest: digest: sha256:82ff8d42e08ae6c10d73126d13bd997cfbfd3f93e7442314be7ad15653812692 size: 1779
+```
+
+##### Running the database "seed" function
+In trying to figure out how to seed the database, I learned about ***[Kubernetes jobs][tf-resource-k8s-job]***. Through the use of the `kubernetes_job` resource, I was able to run up the container and seed the database.
+```hcl
+resource "kubernetes_job" "db_seed" {
+  metadata {
+    name = "database-seed"
+  }
+
+  spec {
+    template {
+      metadata {}
+      spec {
+        container {
+          image = var.container_image_path
+          name = var.container_name
+
+          command = [var.container_entrypoint]
+          args = ["updatedb", "-s"]
+
+          env {
+            name = "VTT_DBUSER"
+            value = "${azurerm_postgresql_server.pgsql_server.administrator_login}@${azurerm_postgresql_server.pgsql_server.name}"
+          }
+          env {
+            name = "VTT_DBPASSWORD"
+            value = random_password.pgsql_password.result
+          }
+          env {
+            name = "VTT_DBNAME"
+            value = azurerm_postgresql_database.pgsql_db.name
+          }
+          env {
+            name = "VTT_DBPORT"
+            value = var.pgsql_server_port
+          }
+          env {
+            name = "VTT_DBHOST"
+            value = azurerm_postgresql_server.pgsql_server.fqdn
+          }
+          env {
+            name = "VTT_LISTENHOST"
+            value = "0.0.0.0"
+          }
+          env {
+            name = "VTT_LISTENPORT"
+            value = var.container_port
+          }
+        }
+
+        restart_policy = "Never"
+
+        image_pull_secrets {
+            name = kubernetes_secret.github_pull_secret.metadata.0.name
+        }
+      }
+    }
+    backoff_limit = 4
+  }
+  wait_for_completion = true
+}
+```
+
+**NOTE:** Running the database seed function without the `-s` argument would not work regardless of how I formatted the `VTT_DBUSER` variable:
+```sh
+Dropping and recreating database: database-name
+DROP DATABASE IF EXISTS database-name
+CREATE DATABASE database-name
+WITH
+OWNER = postgres@database-server
+ENCODING = 'UTF8'
+LC_COLLATE = 'en_US.utf8'
+LC_CTYPE = 'en_US.utf8'
+TABLESPACE = pg_default
+CONNECTION LIMIT = -1
+TEMPLATE template0;
+pq: syntax error at or near "@"
+```
+
+### Alternative Solutions
+##### Automating the builds of Docker images as part of the environment deployment
+I figured that the steps from here had to be incorporating the building of an image, and the pushing of this image into an image registry, into the deployment process. My first iteration was using the `local-exec` provider as part of the `azurerm_container_registry` resource:
+```hcl
+resource "azurerm_container_registry" "acr" {
+  name                     = var.acr_name
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = azurerm_resource_group.rg.location
+  sku                      = "Standard"
+  admin_enabled            = false
+
+  provisioner "local-exec" {
+    command     = <<DOCKER
+docker build ${var.container_image_gitfile} -t ${var.container_image_name}:${var.container_image_tag};
+docker tag techchallengeapp ${azurerm_container_registry.acr.login_server}/${var.container_image_name};
+docker login ${azurerm_container_registry.acr.login_server} -u "${azuread_service_principal.aks_sp.application_id}" -p "${random_password.aks_sp.result}";
+docker push ${azurerm_container_registry.acr.login_server}/${var.container_image_name};
+DOCKER
+    interpreter = ["PowerShell", "-Command"]
+  }
+}
+```
+I was unable to get this to work due to issues with the `service_principal`, and was unable to get past the stage of authenticating to the Azure Container Registry.
+
+##### ACR images
+Despite the failures outlined in the previous point, I did write config to use an Azure Container Registry created elsewhere in the Terraform stack to pull Docker images. Hopefully someone else can use this:
+```hcl
+resource "kubernetes_deployment" "k8s_deployment" {
+  metadata {
+    name = var.k8s_app_name
+    labels = {
+      App = var.k8s_app_name
+    }
+  }
+  spec {
+    replicas = var.k8s_replicas
+    selector {
+      match_labels = {
+        App = var.k8s_app_name
+      }
+    }
+    template {
+      metadata {
+        labels = {
+          App = var.k8s_app_name
+        }
+      }
+      spec {
+        container {
+          image = "${azurerm_container_registry.acr.login_server}/${var.container_image_name}:${var.container_image_tag}"
+          name  = var.k8s_app_name
+        }
+      }
+    }
+  }
+}
+```
+
+### Personal Challenges
+* I had never written a Terraform deployment from scratch before this. I had contributed to Terraform scripts as part of a team, but never managed one from snout-to-tail all by myself.
+* I had only minimally worked with Azure before, primarily troubleshooting networking and security issues within environments belonging to customers or other teams.
+* I had little experience with containerisation technology, other than understanding the concepts for architectural purposes, and I had definitely never built a docker image!
+
+## Technology
+* Microsoft Azure
+* Hashicorp Terraform
+* Kubernetes
+* Docker
+
+
+[tca-git-repo]: <https://github.com/servian/TechChallengeApp>
+[tca-git-repo-pull-image]: <https://github.com/servian/TechChallengeApp/blob/master/doc/readme.md#pull-image-from-github-packages>
+[ms-region-issue]: <https://social.microsoft.com/Forums/Windows/en-US/e3e7ab8b-a00c-4204-9e9d-7dd7be315516/error-this-subscription-is-restricted-from-provisioning-postgresql-servers-in-this-region-when?forum=AzureDatabaseforPostgreSQL>
+[ms-pgsql-issue]: <https://github.com/terraform-providers/terraform-provider-azurerm/issues/6959#issuecomment-632842219>
+[tf-resource-secret]: <https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/secret#username-and-password>
+[tf-resource-k8s-job]: <https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/job>
+[git-config-docker]: <https://docs.github.com/en/packages/using-github-packages-with-your-projects-ecosystem/configuring-docker-for-use-with-github-packages>
+[git-packages-billing]: <https://docs.github.com/en/github/setting-up-and-managing-billing-and-payments-on-github/about-billing-for-github-packages>
+[git-create-token]: <https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token>
