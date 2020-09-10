@@ -21,7 +21,7 @@ az login
 Connect-AzAccount
 ```
 Also, make sure that you have an active Azure subscription. That could be an issue given that this solution is based upon the Azure platform.
-***NOTE:*** I used the free tier excusively to develop this solution, so it can definitely be done.
+> :money_with_wings: ***NOTE:*** I used the free tier excusively to develop this solution, in case there are any cost-related concerns. Just remember to run a `terraform destroy` when you're done with this environment and you should be fine.
 
 ### Initialise and apply the Terraform configuration.
 From within the directory that you've cloned this repo to, issue the following commands.
@@ -240,11 +240,23 @@ Then, generate the image:
 terraform graph | dot -Tsvg > graph.svg
 ```
 
+## Next Steps
+
+### CI/CD
+This deployment currently has a pre-requisite of there being an already built Docker image. Ideally we would use CircleCI or GitHub actions for the testing and building of their images, and then trigger a rebuild of the environment. The trigger for these actions would depend on what part of the codebase was being changed:
+* If the application code is changed, rebuild the image and coordinate the re-deployment of the contaners housing the application.
+* If the Terraform code is changed, only trigger a re-deployment of the affected infrastructure.
+Obviously these steps would need to be fleshed out much more if this was any more than a technical demo, such as a production environment.
+
+### Modules
+I would love to learn about, and implement, Terraform modularisation at some stage. While I don't believe there would be significant benefits for a project this small, it's more about re-usability of these components in other projects or deployments going forward.
+
+
 ## Alternative Solutions
 ***AKA the ones that didn't make the cut.***
 
 ### Automating the builds of Docker images as part of the environment deployment
-I figured that the steps from here had to be incorporating the building of an image, and the pushing of this image into an image registry, into the deployment process. My first iteration was using the `local-exec` provider as part of the `azurerm_container_registry` resource:
+After running into issues with pulling the Docker image from the Servian GitHub Packages registry, I looked into incorporating the building of an image, and the pushing of this image into an image registry, into the deployment process. Before I turned to migrating this outsite the automation process, I attempted to implement this functionality using the `local-exec` provider as part of the `azurerm_container_registry` resource:
 ```hcl
 resource "azurerm_container_registry" "acr" {
   name                     = var.acr_name
@@ -264,7 +276,7 @@ DOCKER
   }
 }
 ```
-I was unable to get this to work due to issues with the `service_principal`, and was unable to get past the stage of authenticating to the Azure Container Registry.
+I was unable to get this to work due to issues with the `service_principal`, and stalled at the stage of authenticating to the Azure Container Registry.
 
 ### ACR images
 Despite the failures outlined in the previous point, I did write config to use an Azure Container Registry created elsewhere in the Terraform stack to pull Docker images. Hopefully someone else can use this:
