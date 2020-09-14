@@ -55,7 +55,7 @@ I took the following approach for deploying this software:
 * A PostgreSQL Server to store the data.
 
 ## Technical Challenges
-The main challenges of this project were related to working within the confines of a free-tier Azure account. That said, there were several others than hopefully can serve as a lesson to others who may be on the same learning journey as myself.
+The main challenges of this project were related to working within the confines of a free-tier Azure account. That said, there were several specific situations that might serve as a lesson to others who are on the same learning journey as myself.
 
 ### Azure Free-tier Limitations
 Microsoft recently applied additional limitations on customers using free benefit subscriptions. One such limitation was the ability to create an instance of Azure Database for PostgreSQL. This was addressed by changing the region from `Australia Southeast` to `Southeast Asia`. Reference ***[here][ms-region-issue]***.
